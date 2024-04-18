@@ -56,7 +56,7 @@ class Cache:
 
 
 class Processor:
-    global processors, memory, time, commands_amount, flag1,flag2
+    global processors, memory, time, commands_amount, flag2
 
     def __init__(self, id, cache, memory):
         # привязка с соответсвующему кэшу и к главной памяти
@@ -65,16 +65,14 @@ class Processor:
         self.main_memory = memory
 
     def rewrite_cacheline(self, tag, data, state):
-        global time, commands_amount, flag1,flag2
+        global time, commands_amount, flag2
         time += 1
-        if len(commands_amount) > 0:
-            if self.id != commands_amount[-1]:
-                time -= 1
-        #arr=self.cache.lines
+        if len(commands_amount) > 0 and self.id != commands_amount[-1]:
+            time -= 1
         if tag % CACHE_WAYS == 0:
-            arr=self.cache.lines[0: CACHE_SETS//CACHE_WAYS -1]
+            arr = self.cache.lines[0: CACHE_SETS // CACHE_WAYS - 1]
         else:
-            arr=self.cache.lines[CACHE_SETS//CACHE_WAYS: CACHE_SETS -1]
+            arr = self.cache.lines[CACHE_SETS // CACHE_WAYS: CACHE_SETS - 1]
         # если есть инвалидная строка - пишем в неё
         for line in arr:
             if line.state == INVALID:
@@ -84,10 +82,10 @@ class Processor:
             # иначе радномную удаляем
             if tag % CACHE_WAYS == 0:
                 evicted_line = self.cache.lines[
-                    random.randint(0, CACHE_SETS//CACHE_WAYS -1)]
+                    random.randint(0, CACHE_SETS // CACHE_WAYS - 1)]
             else:
                 evicted_line = self.cache.lines[
-                    random.randint(CACHE_SETS//CACHE_WAYS, CACHE_SETS -1)]
+                    random.randint(CACHE_SETS // CACHE_WAYS, CACHE_SETS - 1)]
             if evicted_line.state == TAGGED or evicted_line.state == MODIFIED:
                 # сохраняем в мейн память если надо
                 self.main_memory.data[evicted_line.tag] = evicted_line.data
@@ -155,7 +153,7 @@ class Processor:
     def invalidate_others(self, address):
         print(f'Процессор {self.id} посылает запрос инвалидации')
         global time
-        time += 39
+        time += 40
         others_ids = list(range(NUM_PROCESSORS))
         others_ids.remove(self.id)
         for id in others_ids:
@@ -168,21 +166,18 @@ class Processor:
     def read(self, address):
         print('Логи:')
         line = self.cache.get_line(address)
-        global time, commands_amount, flag1,flag2
+        global time, commands_amount, flag2
         time += 20
 
-        if len(commands_amount) > 0:
-            if flag2:
-                time -= 20
-            flag2 = True
+        if len(commands_amount) > 0 and self.id != commands_amount[0]:
+            time -= 20
         # Read Hit
         if line is not None:
             print(
                 f"Read hit: Процессор {self.id} имел линию {self.cache.lines.index(line)} с тэгом {address} и состоянием {line.state}")
             time += 20
-            if len(commands_amount) > 0:
-                if self.id != commands_amount[-1]:
-                    time -= 20
+            if len(commands_amount) > 0 and self.id != commands_amount[-1]:
+                time -= 20
             return line.data
         # Read Miss
         print(
@@ -195,31 +190,27 @@ class Processor:
         time += 40
         self.rewrite_cacheline(address, data, state)
         time += 20
-        if len(commands_amount)>0:
-            if self.id!=commands_amount[-1]:
-                time-=20
+        if len(commands_amount) > 0 and self.id != commands_amount[-1]:
+            time -= 20
         return data
 
     def write(self, address):
         print('Логи:')
         line = self.cache.get_line(address)
-        global time, commands_amount, flag1,flag2
+        global time, commands_amount, flag2
         time += 20
 
-        if len(commands_amount) > 0:
-            if self.id != commands_amount[1]:
-                time -= 20
+        if len(commands_amount) > 0 and self.id != commands_amount[0]:
+            time -= 20
         if line is not None:
             # write hit
             print(
                 f'Write hit:Процессор {self.id} имел линию {self.cache.lines.index(line)} с тэгом {address} и состоянием {line.state}')
-            data_0 = line.data
-            state_0 = line.state
             line.data = (line.data + 1) % (2 ** CACHE_LINE_SIZE)
             if line.state != EXCLUSIVE and line.state != MODIFIED:
                 self.invalidate_others(address)
             line.state = MODIFIED
-            return line.data  # f'Линия {self.cache.lines.index(line)} with tag {line.tag}: {states[state_0]}=>{states[line.state]}, {data_0}=>{line.data} '
+            return line.data
 
         # Промах в кэше
         print(
@@ -242,8 +233,7 @@ class Processor:
 
 # Функция инициализации системы
 def initialize_system():
-    global processors, memory, time, commands_amount, flag1,flag2
-    flag1 = False
+    global processors, memory, time, commands_amount, flag2
     flag2 = False
     memory = MainMemory()
     time = 0
@@ -251,10 +241,10 @@ def initialize_system():
 
 
 def user_interface():
-    global processors, memory, time, commands_amount, flag1,flag2
+    global processors, memory, time, commands_amount, flag2
     many = False
     commands_amount = []
-    flag1 = False
+
     flag2 = False
     while True:
         if many:
@@ -348,7 +338,6 @@ def user_interface():
                         print(
                             f"Процессор {processor_ids[i]} успешно записал данные {data} в адрес {addresses[i]}\n")
                         print_system_state()
-                flag1 = False
                 flag2 = False
 
 
@@ -366,7 +355,7 @@ def user_interface():
 
 # Функция вывода состояния системы
 def print_system_state():
-    global processors, memory, time, commands_amount, flag1,flag2
+    global processors, memory, time, commands_amount, flag2
     print("Состояние системы:")
     print(f"tick:{time}")
     print("Основная память:")
