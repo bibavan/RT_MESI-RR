@@ -70,16 +70,24 @@ class Processor:
         if len(commands_amount) > 0:
             if self.id != commands_amount[-1]:
                 time -= 1
-
+        #arr=self.cache.lines
+        if tag % CACHE_WAYS == 0:
+            arr=self.cache.lines[0: CACHE_SETS//CACHE_WAYS -1]
+        else:
+            arr=self.cache.lines[CACHE_SETS//CACHE_WAYS: CACHE_SETS -1]
         # если есть инвалидная строка - пишем в неё
-        for line in self.cache.lines:
+        for line in arr:
             if line.state == INVALID:
                 line_to_write = line
                 break
         else:
             # иначе радномную удаляем
-            evicted_line = self.cache.lines[
-                random.randint(0, CACHE_SETS - 1)]
+            if tag % CACHE_WAYS == 0:
+                evicted_line = self.cache.lines[
+                    random.randint(0, CACHE_SETS//CACHE_WAYS -1)]
+            else:
+                evicted_line = self.cache.lines[
+                    random.randint(CACHE_SETS//CACHE_WAYS, CACHE_SETS -1)]
             if evicted_line.state == TAGGED or evicted_line.state == MODIFIED:
                 # сохраняем в мейн память если надо
                 self.main_memory.data[evicted_line.tag] = evicted_line.data
@@ -147,7 +155,7 @@ class Processor:
     def invalidate_others(self, address):
         print(f'Процессор {self.id} посылает запрос инвалидации')
         global time
-        time += 40
+        time += 39
         others_ids = list(range(NUM_PROCESSORS))
         others_ids.remove(self.id)
         for id in others_ids:
