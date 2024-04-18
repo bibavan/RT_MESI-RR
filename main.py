@@ -56,7 +56,7 @@ class Cache:
 
 
 class Processor:
-    global processors
+    global processors, memory, time, commands_amount, flag1,flag2
 
     def __init__(self, id, cache, memory):
         # привязка с соответсвующему кэшу и к главной памяти
@@ -65,6 +65,12 @@ class Processor:
         self.main_memory = memory
 
     def rewrite_cacheline(self, tag, data, state):
+        global time, commands_amount, flag1,flag2
+        time += 1
+        if len(commands_amount) > 0:
+            if self.id != commands_amount[-1]:
+                time -= 1
+
         # если есть инвалидная строка - пишем в неё
         for line in self.cache.lines:
             if line.state == INVALID:
@@ -80,11 +86,13 @@ class Processor:
                 print(
                     f'убрали из кэша {self.id} линию {self.cache.lines.index(evicted_line)} отправив данные в основную память')
             else:
-                print(f'убрали из кэша {self.id} линию  {self.cache.lines.index(evicted_line)}')
+                print(
+                    f'убрали из кэша {self.id} линию  {self.cache.lines.index(evicted_line)}')
             evicted_line.state = INVALID
             line_to_write = evicted_line
         # записываем данные
-        print(f'Процессор {self.id} записывает данные {data} в линию {self.cache.lines.index(line_to_write)} с тегом {tag} и состоянием {states[state]}')
+        print(
+            f'Процессор {self.id} записывает данные {data} в линию {self.cache.lines.index(line_to_write)} с тегом {tag} и состоянием {states[state]}')
         line_to_write.tag = tag
         line_to_write.data = data
         line_to_write.state = state
@@ -92,7 +100,10 @@ class Processor:
         # возвращает значение для чтения из других кэшей и флаг который надо к нему поставить
 
     def read_in_others(self, address):
-        print(f'Процессор {self.id} отправил по шине запрос о чтении из адреса {address}')
+        print(
+            f'Процессор {self.id} отправил по шине запрос о чтении из адреса {address}')
+        global time
+        time += 40
         others_ids = list(range(NUM_PROCESSORS))
         others_ids.remove(self.id)
         # id всех кроме вызвашего
@@ -112,6 +123,8 @@ class Processor:
 
     # возвращает значение для модификации из других кэшей и флаг который надо к нему поставить
     def RWITM_in_others(self, address):
+        global time
+        time += 40
         print(
             f'Процессор {self.id} отправил по шине запрос о чтении из адреса {address} с намерением изменить данные')
         others_ids = list(range(NUM_PROCESSORS))
@@ -121,16 +134,20 @@ class Processor:
             if line is not None and line.state != SHARED:
                 print(
                     f'Процессор {id} прерывает и предоставляет данные, т.к. имеет в кэше линию с адресом {address} в состоянии={states[line.state]}')
-                line.state=INVALID
+                line.state = INVALID
                 print(
                     f'Процессор {id} меняет состояние линии {processors[id].cache.lines.index(line)} с адресом {address} на INVALID')
+                time += 20
                 return line.data, MODIFIED
+        time += 20
         print('не было отправлено прерываний от других кэшей')
         return None, RECENT
 
     # делает инвалидами все значения с заданным тэгом в других кэшах
     def invalidate_others(self, address):
         print(f'Процессор {self.id} посылает запрос инвалидации')
+        global time
+        time += 40
         others_ids = list(range(NUM_PROCESSORS))
         others_ids.remove(self.id)
         for id in others_ids:
@@ -143,25 +160,47 @@ class Processor:
     def read(self, address):
         print('Логи:')
         line = self.cache.get_line(address)
+        global time, commands_amount, flag1,flag2
+        time += 20
+
+        if len(commands_amount) > 0:
+            if flag2:
+                time -= 20
+            flag2 = True
         # Read Hit
         if line is not None:
             print(
                 f"Read hit: Процессор {self.id} имел линию {self.cache.lines.index(line)} с тэгом {address} и состоянием {line.state}")
+            time += 20
+            if len(commands_amount) > 0:
+                if self.id != commands_amount[-1]:
+                    time -= 20
             return line.data
         # Read Miss
         print(
-       f"Read miss: Процессор {self.id} не имеет линии с тегом {address} у себя в кэше")
+            f"Read miss: Процессор {self.id} не имеет линии с тегом {address} у себя в кэше")
         data, state = self.read_in_others(address)
         # only in main memory
         if data is None:
             data = self.main_memory.data[address]
         # put data in cache
+        time += 40
         self.rewrite_cacheline(address, data, state)
+        time += 20
+        if len(commands_amount)>0:
+            if self.id!=commands_amount[-1]:
+                time-=20
         return data
 
     def write(self, address):
         print('Логи:')
         line = self.cache.get_line(address)
+        global time, commands_amount, flag1,flag2
+        time += 20
+
+        if len(commands_amount) > 0:
+            if self.id != commands_amount[1]:
+                time -= 20
         if line is not None:
             # write hit
             print(
@@ -172,36 +211,46 @@ class Processor:
             if line.state != EXCLUSIVE and line.state != MODIFIED:
                 self.invalidate_others(address)
             line.state = MODIFIED
-            return line.data #f'Линия {self.cache.lines.index(line)} with tag {line.tag}: {states[state_0]}=>{states[line.state]}, {data_0}=>{line.data} '
+            return line.data  # f'Линия {self.cache.lines.index(line)} with tag {line.tag}: {states[state_0]}=>{states[line.state]}, {data_0}=>{line.data} '
 
         # Промах в кэше
         print(
             f"Write miss: Процессор {self.id} не имеет линии с тегом {address} у себя в кэше")
         data, state = self.RWITM_in_others(address)
+        where = True
         if data == None:
+            where = False
             print(
                 f"Процессор {self.id} читает данные с тегом {address} из основной памяти")
             data = self.main_memory.data[address]
+        time += 20
         print(
-            f"Процессор {self.id} инкрементирует данные с тегом {address}:{data}=>{data+1}")
+            f"Процессор {self.id} инкрементирует данные с тегом {address}:{data}=>{data + 1}")
         self.rewrite_cacheline(address, data + 1, MODIFIED)
-        self.invalidate_others(address)
+        if where:
+            self.invalidate_others(address)
         return data
 
 
 # Функция инициализации системы
 def initialize_system():
-    global processors, memory, time
+    global processors, memory, time, commands_amount, flag1,flag2
+    flag1 = False
+    flag2 = False
     memory = MainMemory()
+    time = 0
     processors = [Processor(i, Cache(), memory) for i in range(NUM_PROCESSORS)]
 
 
 def user_interface():
-    global processors, memory, time
+    global processors, memory, time, commands_amount, flag1,flag2
     many = False
+    commands_amount = []
+    flag1 = False
+    flag2 = False
     while True:
         if many:
-            if len(commands)>0:
+            if len(commands) > 0:
                 print('Можете продолжать ввод команд')
                 print('список команд на данный момент:')
                 for i, command in enumerate(commands):
@@ -237,6 +286,7 @@ def user_interface():
                 else:
                     commands.append('r')
                     processor_ids.append(processor_id)
+                    commands_amount.append(processor_id)
                     addresses.append(address)
 
 
@@ -244,7 +294,7 @@ def user_interface():
             processor_id = int(command[1])
             address = int(command[2])
             if not many:
-                data=processors[processor_id].write(address)
+                data = processors[processor_id].write(address)
                 print(
                     f"Процессор {processor_id} успешно записал данные {data} в адрес {address}\n")
                 print_system_state()
@@ -259,6 +309,7 @@ def user_interface():
                 else:
                     commands.append('w')
                     processor_ids.append(processor_id)
+                    commands_amount.append(processor_id)
                     addresses.append(address)
 
 
@@ -267,23 +318,30 @@ def user_interface():
             if many:
                 commands = []
                 processor_ids = []
+                commands_amount = []
                 addresses = []
                 print(
                     f"Вводите команды - по одной на процессор")
             else:
                 print("Выполнение команд")
                 for i, command in enumerate(commands):
-                    print(f'Команда {i}: {command} {processor_ids[i]} {addresses[i]}')
+                    print(
+                        f'Команда {i}: {command} {processor_ids[i]} {addresses[i]}')
                     if command == 'r':
+                        global time
+
                         data = processors[processor_ids[i]].read(addresses[i])
                         print(
                             f"Процессор {processor_id} успешно прочел данные {data} из адреса {address}\n")
                         print_system_state()
                     else:
-                        data=[processor_ids[i]].write(addresses[i])
+
+                        data = processors[processor_ids[i]].write(addresses[i])
                         print(
                             f"Процессор {processor_ids[i]} успешно записал данные {data} в адрес {addresses[i]}\n")
                         print_system_state()
+                flag1 = False
+                flag2 = False
 
 
         elif command[0] == "reset":
@@ -300,8 +358,9 @@ def user_interface():
 
 # Функция вывода состояния системы
 def print_system_state():
-    global processors, memory, time
+    global processors, memory, time, commands_amount, flag1,flag2
     print("Состояние системы:")
+    print(f"tick:{time}")
     print("Основная память:")
     mem = PrettyTable(list(range(MEM_SIZE)))
     mem.add_row(tuple(memory.data))
