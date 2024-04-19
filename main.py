@@ -56,7 +56,13 @@ class Cache:
 
 
 class Processor:
-    global processors, memory, time, commands_amount, flag2
+    global processors, memory, time, commands_amount, system_states
+    system_states = {}
+
+    def change_time_n_save_state(self, delta):
+        global time
+        time += delta
+        system_states[time] = get_system_state()
 
     def __init__(self, id, cache, memory):
         # привязка с соответсвующему кэшу и к главной памяти
@@ -65,10 +71,7 @@ class Processor:
         self.main_memory = memory
 
     def rewrite_cacheline(self, tag, data, state):
-        global time, commands_amount, flag2
-        time += 1
-        if len(commands_amount) > 0 and self.id != commands_amount[-1]:
-            time -= 1
+        global time, commands_amount
         if tag % CACHE_WAYS == 0:
             arr = self.cache.lines[0: CACHE_SETS // CACHE_WAYS - 1]
         else:
@@ -102,14 +105,15 @@ class Processor:
         line_to_write.tag = tag
         line_to_write.data = data
         line_to_write.state = state
-
+        if len(commands_amount) == 0 or self.id == commands_amount[-1]:
+            self.change_time_n_save_state(1)
         # возвращает значение для чтения из других кэшей и флаг который надо к нему поставить
 
     def read_in_others(self, address):
         print(
             f'Процессор {self.id} отправил по шине запрос о чтении из адреса {address}')
         global time
-        time += 40
+        self.change_time_n_save_state(40)
         others_ids = list(range(NUM_PROCESSORS))
         others_ids.remove(self.id)
         # id всех кроме вызвашего
@@ -130,7 +134,7 @@ class Processor:
     # возвращает значение для модификации из других кэшей и флаг который надо к нему поставить
     def RWITM_in_others(self, address):
         global time
-        time += 40
+        self.change_time_n_save_state(40)
         print(
             f'Процессор {self.id} отправил по шине запрос о чтении из адреса {address} с намерением изменить данные')
         others_ids = list(range(NUM_PROCESSORS))
@@ -143,9 +147,9 @@ class Processor:
                 line.state = INVALID
                 print(
                     f'Процессор {id} меняет состояние линии {processors[id].cache.lines.index(line)} с адресом {address} на INVALID')
-                time += 20
+                self.change_time_n_save_state(20)
                 return line.data, MODIFIED
-        time += 20
+        self.change_time_n_save_state(20)
         print('не было отправлено прерываний от других кэшей')
         return None, RECENT
 
@@ -153,7 +157,6 @@ class Processor:
     def invalidate_others(self, address):
         print(f'Процессор {self.id} посылает запрос инвалидации')
         global time
-        time += 40
         others_ids = list(range(NUM_PROCESSORS))
         others_ids.remove(self.id)
         for id in others_ids:
@@ -162,22 +165,21 @@ class Processor:
                 print(
                     f'Линия {processors[id].cache.lines.index(line)} с тэгом {line.tag} в кэше процессора {processors[id].id} стала INVALID: {states[line.state]}=>{INVALID} ')
                 line.state = INVALID
+        self.change_time_n_save_state(40)
 
     def read(self, address):
         print('Логи:')
         line = self.cache.get_line(address)
-        global time, commands_amount, flag2
-        time += 20
+        global time, commands_amount
 
-        if len(commands_amount) > 0 and self.id != commands_amount[0]:
-            time -= 20
+        if len(commands_amount) == 0 or self.id == commands_amount[0]:
+            self.change_time_n_save_state(20)
         # Read Hit
         if line is not None:
             print(
                 f"Read hit: Процессор {self.id} имел линию {self.cache.lines.index(line)} с тэгом {address} и состоянием {line.state}")
-            time += 20
-            if len(commands_amount) > 0 and self.id != commands_amount[-1]:
-                time -= 20
+            if len(commands_amount) == 0 or self.id == commands_amount[-1]:
+                self.change_time_n_save_state(20)
             return line.data
         # Read Miss
         print(
@@ -187,21 +189,18 @@ class Processor:
         if data is None:
             data = self.main_memory.data[address]
         # put data in cache
-        time += 40
+        self.change_time_n_save_state(40)
         self.rewrite_cacheline(address, data, state)
-        time += 20
-        if len(commands_amount) > 0 and self.id != commands_amount[-1]:
-            time -= 20
+        if len(commands_amount) == 0 or self.id == commands_amount[-1]:
+            self.change_time_n_save_state(20)
         return data
 
     def write(self, address):
         print('Логи:')
         line = self.cache.get_line(address)
-        global time, commands_amount, flag2
-        time += 20
-
-        if len(commands_amount) > 0 and self.id != commands_amount[0]:
-            time -= 20
+        global time, commands_amount
+        if len(commands_amount) == 0 or self.id == commands_amount[0]:
+            self.change_time_n_save_state(20)
         if line is not None:
             # write hit
             print(
@@ -217,12 +216,12 @@ class Processor:
             f"Write miss: Процессор {self.id} не имеет линии с тегом {address} у себя в кэше")
         data, state = self.RWITM_in_others(address)
         where = True
-        if data == None:
+        if data is None:
             where = False
             print(
                 f"Процессор {self.id} читает данные с тегом {address} из основной памяти")
             data = self.main_memory.data[address]
-        time += 20
+        self.change_time_n_save_state(20)
         print(
             f"Процессор {self.id} инкрементирует данные с тегом {address}:{data}=>{data + 1}")
         self.rewrite_cacheline(address, data + 1, MODIFIED)
@@ -233,19 +232,17 @@ class Processor:
 
 # Функция инициализации системы
 def initialize_system():
-    global processors, memory, time, commands_amount, flag2
-    flag2 = False
+    global processors, memory, time, commands_amount
     memory = MainMemory()
     time = 0
     processors = [Processor(i, Cache(), memory) for i in range(NUM_PROCESSORS)]
 
 
 def user_interface():
-    global processors, memory, time, commands_amount, flag2
+    global processors, memory, time, commands_amount
     many = False
     commands_amount = []
 
-    flag2 = False
     while True:
         if many:
             if len(commands) > 0:
@@ -259,13 +256,13 @@ def user_interface():
             print("r <processor_id> <address> - чтение по адресу")
             print("w <processor_id> <address>  - запись по адресу")
             print("m - начать ввод нескольких команд")
+            print("t - просмотреть состояние системы в при определенных tick")
             print("reset - сброс системы")
             print("exit - выход")
 
         command = input("Введите команду: ").split()
 
         if command[0] == "r":
-
             processor_id = int(command[1])
             address = int(command[2])
             if not many:
@@ -338,7 +335,17 @@ def user_interface():
                         print(
                             f"Процессор {processor_ids[i]} успешно записал данные {data} в адрес {addresses[i]}\n")
                         print_system_state()
-                flag2 = False
+
+
+        elif command[0] == "t":
+            global system_states
+            while True:
+                print('Таблица доступных значений tick:')
+                print(list(system_states.keys()))
+                key=input('Введите значени, чтобы увидеть состояние системы на тот момент времени(t-exit):')
+                if key=='t':
+                    break
+                print(system_states[int(key)])
 
 
         elif command[0] == "reset":
@@ -355,14 +362,20 @@ def user_interface():
 
 # Функция вывода состояния системы
 def print_system_state():
-    global processors, memory, time, commands_amount, flag2
-    print("Состояние системы:")
-    print(f"tick:{time}")
-    print("Основная память:")
+    global processors, memory, time, commands_amount
+    print(get_system_state())
+
+
+def get_system_state():
+    output = ''
+    global processors, memory, time, commands_amount
+    output += "Состояние системы:\n"
+    output += f"tick:{time}\n"
+    output += "Основная память:\n"
     mem = PrettyTable(list(range(MEM_SIZE)))
     mem.add_row(tuple(memory.data))
-    print(mem)
-    print("Кэши процессоров:")
+    output += mem.get_string()
+    output += "\nКэши процессоров:\n"
     headers = tuple(f"Процессор {i}" for i in range(NUM_PROCESSORS))
     x = PrettyTable(headers)
     for line_id in range(CACHE_SETS):
@@ -372,7 +385,8 @@ def print_system_state():
             row += (
                 f"Строка {line_id}: tag={line.tag}, data={line.data}, state={states[line.state]};",)
         x.add_row(row)
-    print(x)
+    output += x.get_string()
+    return output
 
 
 # Инициализация и запуск системы
