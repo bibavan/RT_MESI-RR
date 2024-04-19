@@ -262,6 +262,28 @@ def user_interface():
 
         command = input("Введите команду: ").split()
 
+        if len(command)<3:
+            print(
+                f"Вы ввели не все необходимые данные\n")
+            continue
+        try:
+            number1 = int(command[1])
+            number2= int(command[2])
+        except ValueError:
+            print(
+                f"Введён неверный номер процессора или адрес. Их значение должно быть целочисленным\n")
+            continue
+        
+        if int(command[1])>3  or int(command[1])<0:
+            print(
+                f"Введён неверный номер процессора. Его значение должно быть от 0 до 3\n")
+            continue
+        if int(command[2])>15 or int(command[2])<0 :
+            print(
+                f"Введён неверный адрес. Его значение должно быть от 0 до 15\n")
+            continue
+
+        
         if command[0] == "r":
             processor_id = int(command[1])
             address = int(command[2])
