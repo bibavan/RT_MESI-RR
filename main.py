@@ -205,7 +205,7 @@ class Processor:
             # write hit
             print(
                 f'Write hit:Процессор {self.id} имел линию {self.cache.lines.index(line)} с тэгом {address} и состоянием {states[line.state]}')
-            data_0=line.data
+            data_0 = line.data
             line.data = (line.data + 1) % (2 ** CACHE_LINE_SIZE)
             print(
                 f"Процессор {self.id} инкрементирует данные с тегом {address}: {data_0}=>{line.data} (состояние: {states[line.state]}=>{states[MODIFIED]})")
@@ -231,15 +231,16 @@ class Processor:
         self.rewrite_cacheline(address, result_data, MODIFIED)
         if where:
             self.invalidate_others(address)
-        return data+1
+        return data + 1
 
 
 # Функция инициализации системы
 def initialize_system():
-    global processors, memory, time, commands_amount
+    global processors, memory, time, commands_amount, system_states
     memory = MainMemory()
     time = 0
     processors = [Processor(i, Cache(), memory) for i in range(NUM_PROCESSORS)]
+    system_states[0] = get_system_state()
 
 
 def user_interface():
@@ -266,11 +267,11 @@ def user_interface():
 
         command = input("Введите команду: ").split()
 
-        if (command[0] == "r" or command[0] == "w") and len(command)<3:
+        if (command[0] == "r" or command[0] == "w") and len(command) < 3:
             print(
                 f"Вы ввели не все необходимые данные\n")
             continue
-            
+
         if (command[0] == "r" or command[0] == "w") and len(command) > 3:
             print(
                 f"Вы ввели слишком много переменных\n")
@@ -284,22 +285,21 @@ def user_interface():
         if command[0] == "r" or command[0] == "w":
             try:
                 number1 = int(command[1])
-                number2= int(command[2])
+                number2 = int(command[2])
             except ValueError:
                 print(
                     f"Введён неверный номер процессора или адрес. Их значение должно быть целочисленным\n")
                 continue
-            
-            if int(command[1])>3  or int(command[1])<0:
+
+            if int(command[1]) > 3 or int(command[1]) < 0:
                 print(
                     f"Введён неверный номер процессора. Его значение должно быть от 0 до 3\n")
                 continue
-            if int(command[2])>15 or int(command[2])<0 :
+            if int(command[2]) > 15 or int(command[2]) < 0:
                 print(
                     f"Введён неверный адрес. Его значение должно быть от 0 до 15\n")
                 continue
 
-        
         if command[0] == "r":
             processor_id = int(command[1])
             address = int(command[2])
@@ -379,12 +379,23 @@ def user_interface():
             global system_states
             while True:
                 print('\nВведите t чтобы продолжить вводить другие команды')
-                print('Таблица доступных значений tick:')
-                print(list(system_states.keys()))
-                key=input('Введите значение, чтобы увидеть состояние системы на тот момент времени(t-exit):')
-                if key=='t':
+                keys = list(system_states.keys())
+                key = input(
+                    f'Введите значение tick от 0 до {keys[-1]}, чтобы увидеть состояние системы на тот момент времени (\'t\' - выход):')
+                if key == 't':
                     break
-                print(system_states[int(key)])
+                try:
+                    destination_tick = int(key)
+                except ValueError:
+                    print(
+                        f"Введён неверное значение тика. Их значение должно быть целочисленным\n")
+                    continue
+                if destination_tick < 0:
+                    print(f'Значение должно быть больше 0')
+                for i, tick in enumerate(keys):
+                    if destination_tick >= tick:
+                        print(system_states[tick])
+
 
 
         elif command[0] == "reset":
