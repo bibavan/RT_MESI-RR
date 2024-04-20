@@ -4,7 +4,7 @@ from prettytable import PrettyTable
 # Параметры системы
 NUM_PROCESSORS = 4
 MEM_SIZE = 16  # 16 ячеек по 1 байт
-CACHE_LINE_SIZE = 8  # Размер строки кэша 8 бит
+CACHE_LINE_SIZE = 2  # Размер строки кэша 8 бит
 CACHE_WAYS = 2  # Ассоциативность кэша 2
 CACHE_SETS = 4  # 4 строки кэша
 
@@ -93,10 +93,10 @@ class Processor:
                 # сохраняем в мейн память если надо
                 self.main_memory.data[evicted_line.tag] = evicted_line.data
                 print(
-                    f'убрали из кэша {self.id} линию {self.cache.lines.index(evicted_line)} отправив данные в основную память')
+                    f'Процессор {self.id} убрал из кэша линию {self.cache.lines.index(evicted_line)} отправив данные в основную память')
             else:
                 print(
-                    f'убрали из кэша {self.id} линию  {self.cache.lines.index(evicted_line)}')
+                    f'Процессор {self.id} убрал из кэша линию  {self.cache.lines.index(evicted_line)}')
             evicted_line.state = INVALID
             line_to_write = evicted_line
         # записываем данные
@@ -128,7 +128,7 @@ class Processor:
                 if line.state == EXCLUSIVE or line.state == RECENT:
                     line.state = SHARED
                     return line.data, RECENT
-        print('не было отправлено прерываний от других кэшей')
+        print('Не было отправлено прерываний от других кэшей')
         return None, EXCLUSIVE
 
     # возвращает значение для модификации из других кэшей и флаг который надо к нему поставить
@@ -150,7 +150,7 @@ class Processor:
                 self.change_time_n_save_state(20)
                 return line.data, MODIFIED
         self.change_time_n_save_state(20)
-        print('не было отправлено прерываний от других кэшей')
+        print('Не было отправлено прерываний от других кэшей')
         return None, RECENT
 
     # делает инвалидами все значения с заданным тэгом в других кэшах
@@ -204,8 +204,11 @@ class Processor:
         if line is not None:
             # write hit
             print(
-                f'Write hit:Процессор {self.id} имел линию {self.cache.lines.index(line)} с тэгом {address} и состоянием {line.state}')
+                f'Write hit:Процессор {self.id} имел линию {self.cache.lines.index(line)} с тэгом {address} и состоянием {states[line.state]}')
+            data_0=line.data
             line.data = (line.data + 1) % (2 ** CACHE_LINE_SIZE)
+            print(
+                f"Процессор {self.id} инкрементирует данные с тегом {address}: {data_0}=>{line.data} (состояние: {states[line.state]}=>{states[MODIFIED]})")
             if line.state != EXCLUSIVE and line.state != MODIFIED:
                 self.invalidate_others(address)
             line.state = MODIFIED
@@ -218,16 +221,17 @@ class Processor:
         where = True
         if data is None:
             where = False
-            print(
-                f"Процессор {self.id} читает данные с тегом {address} из основной памяти")
             data = self.main_memory.data[address]
+            print(
+                f"Процессор {self.id} читает данные {data} с тегом {address} из основной памяти")
         self.change_time_n_save_state(20)
+        result_data = (data + 1) % (2 ** CACHE_LINE_SIZE)
         print(
-            f"Процессор {self.id} инкрементирует данные с тегом {address}:{data}=>{data + 1}")
-        self.rewrite_cacheline(address, data + 1, MODIFIED)
+            f"Процессор {self.id} инкрементирует данные с тегом {address}: {data}=>{result_data}")
+        self.rewrite_cacheline(address, result_data, MODIFIED)
         if where:
             self.invalidate_others(address)
-        return data
+        return data+1
 
 
 # Функция инициализации системы
@@ -394,7 +398,7 @@ def get_system_state():
     output = ''
     global processors, memory, time, commands_amount
     output += "Состояние системы:\n"
-    output += f"tick:{time}\n"
+    output += f"tick: {time}\n"
     output += "Основная память:\n"
     mem = PrettyTable(list(range(MEM_SIZE)))
     mem.add_row(tuple(memory.data))
