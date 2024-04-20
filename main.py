@@ -270,6 +270,16 @@ def user_interface():
             print(
                 f"Вы ввели не все необходимые данные\n")
             continue
+            
+        if (command[0] == "r" or command[0] == "w") and len(command) > 3:
+            print(
+                f"Вы ввели слишком много переменных\n")
+            continue
+
+        if (command[0] == "m") and len(command) != 1:
+            print(
+                f"Вы ввели слишком много переменных\n")
+            continue
 
         if command[0] == "r" or command[0] == "w":
             try:
@@ -368,9 +378,10 @@ def user_interface():
         elif command[0] == "t":
             global system_states
             while True:
+                print('\nВведите t чтобы продолжить вводить другие команды')
                 print('Таблица доступных значений tick:')
                 print(list(system_states.keys()))
-                key=input('Введите значени, чтобы увидеть состояние системы на тот момент времени(t-exit):')
+                key=input('Введите значение, чтобы увидеть состояние системы на тот момент времени(t-exit):')
                 if key=='t':
                     break
                 print(system_states[int(key)])
