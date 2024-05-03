@@ -101,7 +101,7 @@ class Processor:
             line_to_write = evicted_line
         # записываем данные
         print(
-            f'Процессор {self.id} записывает данные {data} в линию {self.cache.lines.index(line_to_write)} с тегом {tag} и состоянием {states[state]}')
+            f'Процессор {self.id} записывает данные {data} в линию {self.cache.lines.index(line_to_write)} с тегом {bin(tag//2)} и состоянием {states[state]}')
         line_to_write.tag = tag
         line_to_write.data = data
         line_to_write.state = state
@@ -111,8 +111,9 @@ class Processor:
 
     def read_in_others(self, address):
         print(
-            f'Процессор {self.id} отправил по шине запрос о чтении из адреса {address}')
-        global time
+            f'Процессор {self.id} отправил по шине запрос о чтении из адреса {bin(address)}')
+        global time, bus
+        bus += 1
         self.change_time_n_save_state(40)
         others_ids = list(range(NUM_PROCESSORS))
         others_ids.remove(self.id)
@@ -121,7 +122,7 @@ class Processor:
             line = processors[id].cache.get_line(address)
             if line is not None and line.state != SHARED:
                 print(
-                    f'Процессор {id} прерывает и предоставляет данные, т.к. имеет в кэше линию с адресом {address} в состоянии={states[line.state]}')
+                    f'Процессор {id} прерывает и предоставляет данные, т.к. имеет в кэше линию с адресом {bin(address)} в состоянии={states[line.state]}')
                 if line.state == MODIFIED or line.state == TAGGED:
                     line.state = SHARED
                     return line.data, TAGGED
@@ -133,20 +134,21 @@ class Processor:
 
     # возвращает значение для модификации из других кэшей и флаг который надо к нему поставить
     def RWITM_in_others(self, address):
-        global time
+        global time, bus
         self.change_time_n_save_state(40)
+        bus += 1
         print(
-            f'Процессор {self.id} отправил по шине запрос о чтении из адреса {address} с намерением изменить данные')
+            f'Процессор {self.id} отправил по шине запрос о чтении из адреса {bin(address)} с намерением изменить данные')
         others_ids = list(range(NUM_PROCESSORS))
         others_ids.remove(self.id)
         for id in others_ids:
             line = processors[id].cache.get_line(address)
             if line is not None and line.state != SHARED:
                 print(
-                    f'Процессор {id} прерывает и предоставляет данные, т.к. имеет в кэше линию с адресом {address} в состоянии={states[line.state]}')
+                    f'Процессор {id} прерывает и предоставляет данные, т.к. имеет в кэше линию с адресом {bin(address)} в состоянии={states[line.state]}')
                 line.state = INVALID
                 print(
-                    f'Процессор {id} меняет состояние линии {processors[id].cache.lines.index(line)} с адресом {address} на INVALID')
+                    f'Процессор {id} меняет состояние линии {processors[id].cache.lines.index(line)} с адресом {bin(address)} на INVALID')
                 self.change_time_n_save_state(20)
                 return line.data, MODIFIED
         self.change_time_n_save_state(20)
@@ -156,14 +158,15 @@ class Processor:
     # делает инвалидами все значения с заданным тэгом в других кэшах
     def invalidate_others(self, address):
         print(f'Процессор {self.id} посылает запрос инвалидации')
-        global time
+        global time, bus
+        bus += 1
         others_ids = list(range(NUM_PROCESSORS))
         others_ids.remove(self.id)
         for id in others_ids:
             line = processors[id].cache.get_line(address)
             if line is not None:
                 print(
-                    f'Линия {processors[id].cache.lines.index(line)} с тэгом {line.tag} в кэше процессора {processors[id].id} стала INVALID: {states[line.state]}=>{INVALID} ')
+                    f'Линия {processors[id].cache.lines.index(line)} с тэгом {bin(line.tag//2)} в кэше процессора {processors[id].id} стала INVALID: {states[line.state]}=>{INVALID} ')
                 line.state = INVALID
         self.change_time_n_save_state(40)
 
@@ -177,13 +180,13 @@ class Processor:
         # Read Hit
         if line is not None:
             print(
-                f"Read hit: Процессор {self.id} имел линию {self.cache.lines.index(line)} с тэгом {address} и состоянием {line.state}")
+                f"Read hit: Процессор {self.id} имел линию {self.cache.lines.index(line)} с тэгом {bin(address//2)} и состоянием {line.state}")
             if len(commands_amount) == 0 or self.id == commands_amount[-1]:
                 self.change_time_n_save_state(20)
             return line.data
         # Read Miss
         print(
-            f"Read miss: Процессор {self.id} не имеет линии с тегом {address} у себя в кэше")
+            f"Read miss: Процессор {self.id} не имеет линии с тегом {bin(address//2)} у себя в кэше")
         data, state = self.read_in_others(address)
         # only in main memory
         if data is None:
@@ -204,11 +207,11 @@ class Processor:
         if line is not None:
             # write hit
             print(
-                f'Write hit:Процессор {self.id} имел линию {self.cache.lines.index(line)} с тэгом {address} и состоянием {states[line.state]}')
+                f'Write hit:Процессор {self.id} имел линию {self.cache.lines.index(line)} с тэгом {bin(address//2)} и состоянием {states[line.state]}')
             data_0 = line.data
             line.data = (line.data + 1) % (2 ** CACHE_LINE_SIZE)
             print(
-                f"Процессор {self.id} инкрементирует данные с тегом {address}: {data_0}=>{line.data} (состояние: {states[line.state]}=>{states[MODIFIED]})")
+                f"Процессор {self.id} инкрементирует данные с тегом {bin(address//2)}: {data_0}=>{line.data} (состояние: {states[line.state]}=>{states[MODIFIED]})")
             if line.state != EXCLUSIVE and line.state != MODIFIED:
                 self.invalidate_others(address)
             line.state = MODIFIED
@@ -216,18 +219,18 @@ class Processor:
 
         # Промах в кэше
         print(
-            f"Write miss: Процессор {self.id} не имеет линии с тегом {address} у себя в кэше")
+            f"Write miss: Процессор {self.id} не имеет линии с тегом {bin(address//2)} у себя в кэше")
         data, state = self.RWITM_in_others(address)
         where = True
         if data is None:
             where = False
             data = self.main_memory.data[address]
             print(
-                f"Процессор {self.id} читает данные {data} с тегом {address} из основной памяти")
+                f"Процессор {self.id} читает данные {data} с тегом {bin(address//2)} из основной памяти")
         self.change_time_n_save_state(20)
         result_data = (data + 1) % (2 ** CACHE_LINE_SIZE)
         print(
-            f"Процессор {self.id} инкрементирует данные с тегом {address}: {data}=>{result_data}")
+            f"Процессор {self.id} инкрементирует данные с тегом {bin(address//2)}: {data}=>{result_data}")
         self.rewrite_cacheline(address, result_data, MODIFIED)
         if where:
             self.invalidate_others(address)
@@ -236,15 +239,16 @@ class Processor:
 
 # Функция инициализации системы
 def initialize_system():
-    global processors, memory, time, commands_amount, system_states
+    global processors, memory, time, commands_amount, system_states, bus
     memory = MainMemory()
     time = 0
+    bus = 0
     processors = [Processor(i, Cache(), memory) for i in range(NUM_PROCESSORS)]
     system_states[0] = get_system_state()
 
 
 def user_interface():
-    global processors, memory, time, commands_amount
+    global processors, memory, time, commands_amount, bus
     many = False
     commands_amount = []
 
@@ -306,7 +310,7 @@ def user_interface():
             if not many:
                 data = processors[processor_id].read(address)
                 print(
-                    f"Процессор {processor_id} успешно прочел данные {data} из адреса {address}\n")
+                    f"Процессор {processor_id} успешно прочел данные {data} из адреса {bin(address)}\n")
                 print_system_state()
             else:
                 if processor_id in processor_ids:
@@ -329,7 +333,7 @@ def user_interface():
             if not many:
                 data = processors[processor_id].write(address)
                 print(
-                    f"Процессор {processor_id} успешно записал данные {data} в адрес {address}\n")
+                    f"Процессор {processor_id} успешно записал данные {data} в адрес {bin(address)}\n")
                 print_system_state()
             else:
                 if processor_id in processor_ids:
@@ -365,13 +369,13 @@ def user_interface():
 
                         data = processors[processor_ids[i]].read(addresses[i])
                         print(
-                            f"Процессор {processor_id} успешно прочел данные {data} из адреса {address}\n")
+                            f"Процессор {processor_id} успешно прочел данные {data} из адреса {bin(address)}\n")
                         print_system_state()
                     else:
 
                         data = processors[processor_ids[i]].write(addresses[i])
                         print(
-                            f"Процессор {processor_ids[i]} успешно записал данные {data} в адрес {addresses[i]}\n")
+                            f"Процессор {processor_ids[i]} успешно записал данные {data} в адрес {bin(addresses[i])}\n")
                         print_system_state()
 
 
@@ -412,15 +416,16 @@ def user_interface():
 
 # Функция вывода состояния системы
 def print_system_state():
-    global processors, memory, time, commands_amount
+    global processors, memory, time, commands_amount, bus
     print(get_system_state())
 
 
 def get_system_state():
     output = ''
-    global processors, memory, time, commands_amount
+    global processors, memory, time, commands_amount, bus
     output += "Состояние системы:\n"
     output += f"tick: {time}\n"
+    output += f"Счётчик тактов доступа к шине: {bus}\n"
     output += "Основная память:\n"
     mem = PrettyTable(list(range(MEM_SIZE)))
     mem.add_row(tuple(memory.data))
@@ -433,7 +438,7 @@ def get_system_state():
         for i in range(NUM_PROCESSORS):
             line = processors[i].cache.lines[line_id]
             row += (
-                f"Строка {line_id}: tag={line.tag}, data={line.data}, state={states[line.state]};",)
+                f"Строка {line_id}: tag={bin(line.tag//2)}, data={line.data}, state={states[line.state]};",)
         x.add_row(row)
     output += x.get_string()
     return output
