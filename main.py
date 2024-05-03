@@ -170,6 +170,21 @@ class Processor:
                 line.state = INVALID
         self.change_time_n_save_state(40)
 
+    # меняет остальные R на S
+    def r_to_s_others(self, address):
+        print(f'Процессор {self.id} посылает запрос об изменении состояний RECENT на SHARED')
+        global time, bus
+        bus += 1
+        others_ids = list(range(NUM_PROCESSORS))
+        others_ids.remove(self.id)
+        for id in others_ids:
+            line = processors[id].cache.get_line(address)
+            if (line is not None) and (line.state == RECENT):
+                print(
+                    f'Линия {processors[id].cache.lines.index(line)} с тэгом {bin(line.tag // 2)} в кэше процессора {processors[id].id} стала INVALID: {states[line.state]}=>{INVALID} ')
+                line.state = SHARED
+        self.change_time_n_save_state(40)
+
     def read(self, address):
         print('Логи:')
         line = self.cache.get_line(address)
@@ -181,6 +196,11 @@ class Processor:
         if line is not None:
             print(
                 f"Read hit: Процессор {self.id} имел линию {self.cache.lines.index(line)} с тэгом {bin(address//2)} и состоянием {line.state}")
+            if line.state == SHARED:
+                self.r_to_s_others(address)
+                line.state = RECENT
+                print(
+                    f'Линия {self.cache.lines.index(line)} с тэгом {bin(address//2)} в кэше процессора {self.id} стала RECENT: SHARED => RECENT')
             if len(commands_amount) == 0 or self.id == commands_amount[-1]:
                 self.change_time_n_save_state(20)
             return line.data
@@ -367,6 +387,7 @@ def user_interface():
                     if command == 'r':
                         global time
 
+                        data = processors[processor_ids[i]].read(addresses[i])
                         data = processors[processor_ids[i]].read(addresses[i])
                         print(
                             f"Процессор {processor_id} успешно прочел данные {data} из адреса {bin(address)}\n")
